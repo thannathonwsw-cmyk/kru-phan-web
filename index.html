@@ -1,1 +1,79 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบจัดการครุภัณฑ์</title>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="aurora"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
 
+<div id="loginBox" class="loginbox" style="display:none">
+  <div class="glass login-card">
+    <h2>ระบบจัดการครุภัณฑ์</h2>
+    <p>กรุณาเข้าสู่ระบบด้วยอีเมลของคณะ</p>
+    <button class="btn primary" onclick="login()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<div class="app" id="app" style="display:none">
+  <header class="topbar glass">
+    <div class="brand">
+      <div class="logo">ค</div>
+      <div><b>ครุภัณฑ์</b><small>ตรวจสอบ · บันทึก · สถานะ</small></div>
+    </div>
+    <div class="search-wrap"><input id="searchInput" placeholder="ค้นหาหมายเลข / ชื่อ / สถานที่…"></div>
+    <div class="ctl-group">
+      <button class="ctl-btn" onclick="setFont(fs-0.1)">A−</button>
+      <span class="ctl-label" id="fontLabel">100%</span>
+      <button class="ctl-btn" onclick="setFont(fs+0.1)">A+</button>
+      <button class="ctl-btn" onclick="setFont(1)">↺</button>
+    </div>
+    <button class="switch" onclick="toggleTheme()" aria-label="สลับธีม"><span class="knob"></span></button>
+    <span id="whoami" class="whoami"></span>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="toolbar glass">
+    <select id="yearFilter"><option value="">ทุกปี</option></select>
+    <select id="statusFilter"><option value="">ทุกสถานะ</option></select>
+    <button class="btn" onclick="loadItems()">ค้นหา</button>
+    <button class="btn primary" onclick="openForm()">+ เพิ่มครุภัณฑ์</button>
+  </section>
+
+  <section id="list"></section>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal glass">
+    <h3 id="formTitle">เพิ่มครุภัณฑ์</h3>
+    <form id="itemForm">
+      <div class="form-grid">
+        <label>หมายเลขครุภัณฑ์<input id="fNumber" required></label>
+        <label>ชื่อครุภัณฑ์<input id="fName" required></label>
+        <label>หมวดหมู่<input id="fCategory"></label>
+        <label>สถานะ<select id="fStatus"></select></label>
+        <label>วันที่จัดซื้อ<input id="fDate" type="date"></label>
+        <label>ปีงบประมาณ<input id="fYear" type="number"></label>
+        <label>ราคา<input id="fPrice" type="number"></label>
+        <label>สถานที่<input id="fLocation"></label>
+        <label>หมายเหตุ<input id="fNotes"></label>
+        <label>รูปภาพ<input id="fImage" type="file" accept="image/*"></label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeForm()">ยกเลิก</button>
+        <button type="submit" class="btn primary">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
