@@ -1,6 +1,6 @@
 const APP_CONFIG = {
-  clientId: 'วาง_APPLICATION_CLIENT_ID_ที่นี่',
-  tenant: 'common',
+  clientId: '8d6c06f5-f5c7-4c11-bc25-4a4e881cd9ef',
+  tenant: '8e634e67-9d66-46d2-a529-e1b708c5d8bc',
   filePath: 'ครุภัณฑ์/assets.xlsx',
   imagePath: 'ครุภัณฑ์/images',
   table: 'Assets',
