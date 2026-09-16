@@ -1,3 +1,14 @@
+/* ป้ายบอกโรค: ถ้า JS พังที่ไหน ขึ้นจอแดงบอกทันที */
+window.addEventListener('error', function (e) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:999;' +
+    'background:#7f1d1d;color:#fff;padding:1rem 1.2rem;border-radius:1rem;' +
+    'font-size:14px;white-space:pre-wrap;box-shadow:0 10px 30px rgba(0,0,0,.4)';
+  d.textContent = 'ข้อผิดพลาด: ' + (e.message || e) +
+    '\nไฟล์: ' + (e.filename || '-').split('/').pop() + ' บรรทัดที่ ' + (e.lineno || '-');
+  document.body.appendChild(d);
+});
+
 /* ===== 1) ล็อกอิน Microsoft ===== */
 const msalInstance = new msal.PublicClientApplication({
   auth: {
