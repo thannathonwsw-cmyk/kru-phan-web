@@ -1,6 +1,7 @@
 const APP_CONFIG = {
-  clientId: '8d6c06f5-f5c7-4c11-bc25-4a4e881cd9ef',
-  tenant: '8e634e67-9d66-46d2-a529-e1b708c5d8bc',
+  supabaseUrl: 'https://qyinewbveoocpltyffou.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5aW5ld2J2ZW9vY3BsdHlmZm91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1OTQyMDIsImV4cCI6MjEwNTE3MDIwMn0._s9HBk-dsndZlRy3j0cRBQ_nm1QdX7XGpj8XoWiYDsU',
+  bucket: 'kru-images',
   filePath: 'ครุภัณฑ์/assets.xlsx',
   imagePath: 'ครุภัณฑ์/images',
   table: 'Assets',
