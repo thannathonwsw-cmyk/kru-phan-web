@@ -1,52 +1,54 @@
-/* ป้ายบอกโรค: ถ้า JS พังที่ไหน ขึ้นจอแดงบอกทันที */
+/* ป้ายบอกโรค */
 window.addEventListener('error', function (e) {
   const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:999;' +
-    'background:#7f1d1d;color:#fff;padding:1rem 1.2rem;border-radius:1rem;' +
-    'font-size:14px;white-space:pre-wrap;box-shadow:0 10px 30px rgba(0,0,0,.4)';
-  d.textContent = 'ข้อผิดพลาด: ' + (e.message || e) +
-    '\nไฟล์: ' + (e.filename || '-').split('/').pop() + ' บรรทัดที่ ' + (e.lineno || '-');
+  d.style.cssText = 'position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:999;background:#7f1d1d;color:#fff;padding:1rem 1.2rem;border-radius:1rem;font-size:14px;white-space:pre-wrap';
+  d.textContent = 'ข้อผิดพลาด: ' + (e.message || e) + ' (บรรทัด ' + (e.lineno || '-') + ')';
   document.body.appendChild(d);
 });
 
-/* ===== 1) ล็อกอิน Microsoft ===== */
-const msalInstance = new msal.PublicClientApplication({
-  auth: {
-    clientId: APP_CONFIG.clientId,
-    authority: 'https://login.microsoftonline.com/' + APP_CONFIG.tenant,
-    redirectUri: window.location.origin + window.location.pathname
-  },
-  cache: { cacheLocation: 'localStorage' }
-});
-
-let allRows = [], editingId = null, fileIdCache = '', fs = 1;
-const SCOPES = ['User.Read', 'Files.ReadWrite.All'];
+const sb = supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey);
+let allItems = [], myRole = 'viewer', me = null, editingId = null, fs = 1;
+const SC = {'รอตรวจรับ':'#3b82f6','ใช้งานปกติ':'#22c55e','ถูกยืม':'#f59e0b','ชำรุด/รอซ่อม':'#ef4444','รอจำหน่าย':'#a855f7','จำหน่ายแล้ว':'#64748b','สูญหาย':'#94a3b8'};
 
 window.onload = async function () {
   initPrefs();
-  await msalInstance.initialize();
-  await msalInstance.handleRedirectPromise();
-  const acc = msalInstance.getAllAccounts();
-  if (!acc.length) { document.getElementById('loginBox').style.display = 'flex'; return; }
-  msalInstance.setActiveAccount(acc[0]);
-  document.getElementById('whoami').textContent = acc[0].name + ' · ';
-  const lo = document.createElement('a');
-  lo.href = '#'; lo.textContent = 'ออกจากระบบ';
-  lo.onclick = e => { e.preventDefault(); msalInstance.logoutRedirect(); };
-  document.getElementById('whoami').appendChild(lo);
-  document.getElementById('app').style.display = 'flex';
-  try { await loadInitialData(); } catch (err) { toast('โหลดข้อมูลไม่สำเร็จ: ' + err.message); }
+  const { data } = await sb.auth.getSession();
+  if (data.session) await enterApp(data.session.user);
+  else document.getElementById('loginBox').style.display = 'flex';
 };
 
-function login() { return msalInstance.loginRedirect({ scopes: SCOPES }); }
+/* ----- ล็อกอิน / ออก ----- */
+async function doLogin(e) {
+  e.preventDefault();
+  const { error } = await sb.auth.signInWithPassword({
+    email: document.getElementById('loginEmail').value.trim(),
+    password: document.getElementById('loginPass').value
+  });
+  if (error) { toast('เข้าสู่ระบบไม่สำเร็จ: ' + error.message); return; }
+  const { data } = await sb.auth.getSession();
+  document.getElementById('loginBox').style.display = 'none';
+  await enterApp(data.session.user);
+}
+function doLogout() { sb.auth.signOut().then(() => location.reload()); }
 
-async function getToken() {
-  const req = { scopes: SCOPES, account: msalInstance.getActiveAccount() };
-  try { return (await msalInstance.acquireTokenSilent(req)).accessToken; }
-  catch (e) { return (await msalInstance.acquireTokenPopup(req)).accessToken; }
+async function enterApp(user) {
+  me = user;
+  const { data } = await sb.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+  myRole = data ? data.role : 'viewer';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('roleBadge').textContent = myRole === 'admin' ? 'ผู้ดูแลหลัก' : 'ผู้เข้าชม';
+  document.getElementById('whoami').innerHTML = '';
+  document.getElementById('whoami').append(user.email + ' · ');
+  const lo = document.createElement('a');
+  lo.href = '#'; lo.textContent = 'ออกจากระบบ';
+  lo.onclick = ev => { ev.preventDefault(); doLogout(); };
+  document.getElementById('whoami').appendChild(lo);
+  document.getElementById('btnAdd').style.display = myRole === 'admin' ? '' : 'none';
+  document.getElementById('btnExport').style.display = myRole === 'admin' ? '' : 'none';
+  await loadInitialData();
 }
 
-/* ===== 2) ธีม + ขนาดตัวอักษร ===== */
+/* ----- ธีม + ฟอนต์ ----- */
 function initPrefs() {
   let th = localStorage.getItem('kp-theme');
   if (!th) th = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -59,142 +61,89 @@ function toggleTheme() {
   document.documentElement.dataset.theme = nx;
   localStorage.setItem('kp-theme', nx);
 }
-function setFont(v) {
-  fs = Math.min(1.5, Math.max(0.8, Math.round(v * 10) / 10));
-  applyFs(); localStorage.setItem('kp-fs', fs);
-}
+function setFont(v) { fs = Math.min(1.5, Math.max(0.8, Math.round(v * 10) / 10)); applyFs(); localStorage.setItem('kp-fs', fs); }
 function applyFs() {
   document.documentElement.style.setProperty('--fs', fs);
   document.getElementById('fontLabel').textContent = Math.round(fs * 100) + '%';
 }
 
-/* ===== 3) ตัวคุยกับ Microsoft Graph ===== */
-async function graphFetch(path, opt = {}) {
-  const token = await getToken();
-  const res = await fetch('https://graph.microsoft.com/v1.0/' + path, {
-    ...opt,
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(opt.headers || {}) }
-  });
-  if (res.status === 429) { await new Promise(r => setTimeout(r, 3000)); return graphFetch(path, opt); }
-  if (!res.ok) throw new Error('Graph ' + res.status + ' ' + (await res.text()));
-  return res.status === 204 ? null : res.json();
-}
-
-async function getFileId() {
-  if (fileIdCache) return fileIdCache;
-  const p = APP_CONFIG.filePath.split('/').map(encodeURIComponent).join('/');
-  const j = await graphFetch('me/drive/root:/' + p);
-  fileIdCache = j.id;
-  return j.id;
-}
-async function wb(path, opt) { return graphFetch('me/drive/items/' + (await getFileId()) + '/workbook' + path, opt); }
-async function wbReadAll() {
-  const j = await wb('/tables/' + APP_CONFIG.table + '/rows');
-  return (j.value || []).map(r => r.values);
-}
-async function wbAppend(values) {
-  return wb('/tables/' + APP_CONFIG.table + '/rows/add',
-    { method: 'POST', body: JSON.stringify({ index: null, values: [values] }) });
-}
-async function wbUpdate(i, values) {
-  return wb('/tables/' + APP_CONFIG.table + '/rows/itemAt(index=' + i + ')',
-    { method: 'PATCH', body: JSON.stringify({ values: [values] }) });
-}
-async function uploadImage(blob, name) {
-  const token = await getToken();
-  const p = APP_CONFIG.imagePath.split('/').map(encodeURIComponent).join('/');
-  const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + p + '/' + encodeURIComponent(name) + ':/content', {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'image/jpeg' },
-    body: blob
-  });
-  if (!res.ok) throw new Error('อัปโหลดรูปไม่สำเร็จ ' + res.status);
-  return res.json();
-}
-const thumbCache = {};
-async function thumbUrl(itemId) {
-  if (thumbCache[itemId]) return thumbCache[itemId];
-  const token = await getToken();
-  const base = 'https://graph.microsoft.com/v1.0/me/drive/items/' + itemId;
-  let res = await fetch(base + '/thumbnails/0/medium/content', { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) res = await fetch(base + '/content', { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) return '';
-  const url = URL.createObjectURL(await res.blob());
-  thumbCache[itemId] = url;
-  return url;
-}
-
-/* ===== 4) วาดหน้าจอ ===== */
-function mapRows(rows) {
-  return rows.map(r => ({
-    id: String(r[0] || ''), num: String(r[1] || ''), name: String(r[2] || ''),
-    cat: String(r[3] || ''), status: String(r[4] || ''), date: String(r[5] || '').slice(0, 10),
-    year: String(r[6] || ''), price: String(r[7] || ''), loc: String(r[8] || ''),
-    imgUrl: String(r[9] || ''), fileId: String(r[10] || ''), notes: String(r[11] || '')
-  }));
-}
-const SC = {'รอตรวจรับ':'#3b82f6','ใช้งานปกติ':'#22c55e','ถูกยืม':'#f59e0b','ชำรุด/รอซ่อม':'#ef4444','รอจำหน่าย':'#a855f7','จำหน่ายแล้ว':'#64748b','สูญหาย':'#94a3b8'};
-
+/* ----- โหลดและวาดข้อมูล ----- */
 async function loadInitialData() {
-  allRows = await wbReadAll();
-  const items = mapRows(allRows);
+  const { data, error } = await sb.from('assets').select('*');
+  if (error) { toast('โหลดข้อมูลไม่สำเร็จ: ' + error.message); return; }
+  allItems = data.map(r => ({
+    id: r.id, num: r.asset_number || '', name: r.name || '', cat: r.category || '',
+    status: r.status || '', date: (r.purchase_date || '').slice(0, 10), year: r.year || '',
+    price: r.price || '', loc: r.location || '', img: r.image_path || '', notes: r.notes || ''
+  }));
   document.getElementById('statusFilter').innerHTML =
     '<option value="">ทุกสถานะ</option>' + APP_CONFIG.statuses.map(s => '<option>' + s + '</option>').join('');
   document.getElementById('fStatus').innerHTML =
     APP_CONFIG.statuses.map(s => '<option>' + s + '</option>').join('');
-  const years = [...new Set(items.map(i => i.year).filter(Boolean))].sort().reverse();
+  const years = [...new Set(allItems.map(i => i.year).filter(Boolean))].sort().reverse();
   document.getElementById('yearFilter').innerHTML =
     '<option value="">ทุกปี</option>' + years.map(y => '<option>' + y + '</option>').join('');
-  renderStats(items);
-  loadItems();
+  renderStats(); loadItems();
 }
 
-function renderStats(items) {
-  const by = s => items.filter(i => i.status === s).length;
+function renderStats() {
+  const by = s => allItems.filter(i => i.status === s).length;
   document.getElementById('stats').innerHTML =
-    '<div class="stat glass"><b>' + items.length + '</b><span>ทั้งหมด</span></div>' +
+    '<div class="stat glass"><b>' + allItems.length + '</b><span>ทั้งหมด</span></div>' +
     '<div class="stat glass"><b style="color:#22c55e">' + by('ใช้งานปกติ') + '</b><span>ใช้งานปกติ</span></div>' +
     '<div class="stat glass"><b style="color:#ef4444">' + by('ชำรุด/รอซ่อม') + '</b><span>ชำรุด/รอซ่อม</span></div>' +
-    '<div class="stat glass"><b style="color:var(--ac2)">' + items.filter(i => i.year === String(new Date().getFullYear() + 543)).length + '</b><span>ปีปัจจุบัน</span></div>';
+    '<div class="stat glass"><b style="color:var(--ac2)">' + allItems.filter(i => i.year === String(new Date().getFullYear() + 543)).length + '</b><span>ปีปัจจุบัน</span></div>';
 }
 
 function loadItems() {
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const y = document.getElementById('yearFilter').value;
   const s = document.getElementById('statusFilter').value;
-  renderList(mapRows(allRows).filter(i =>
+  renderList(allItems.filter(i =>
     (!q || [i.num, i.name, i.loc, i.notes].some(v => v.toLowerCase().includes(q))) &&
     (!y || i.year === y) && (!s || i.status === s)));
 }
 
 function renderList(items) {
   const el = document.getElementById('list');
+  const admin = myRole === 'admin';
   if (!items.length) { el.innerHTML = '<div class="empty glass">ไม่พบข้อมูล</div>'; return; }
   el.innerHTML = '<div class="cards">' + items.map(i => {
     const c = SC[i.status] || '#8888aa';
-    return '<div class="card glass">' +
-      '<div class="thumb">' + (i.fileId.indexOf('OD:') === 0
-        ? '<img data-od="' + i.fileId.slice(3) + '" src="">'
-        : (i.imgUrl ? '<img src="' + i.imgUrl + '">' : '<div class="noimg">📦</div>')) + '</div>' +
+    return '<div class="card glass"><div class="thumb">' +
+      (i.img ? '<img data-path="' + i.img + '" src="">' : '<div class="noimg">📦</div>') + '</div>' +
       '<div class="cbody"><b>' + (i.num || '-') + '</b><div>' + (i.name || '-') + '</div>' +
       '<div class="meta">ปีงบ ' + (i.year || '-') + ' · ' + (i.date || '-') + '</div>' +
       '<div class="meta">📍 ' + (i.loc || 'ไม่ระบุ') + '</div>' +
       '<span class="pill" style="color:' + c + ';border-color:' + c + '66;background:' + c + '1f">' + (i.status || '-') + '</span>' +
-      '<div class="cact"><button class="btn" onclick="openForm(\'' + i.id + '\')">แก้ไข</button>' +
-      '<select onchange="updateStatus(\'' + i.id + '\', this.value)">' +
-      APP_CONFIG.statuses.map(s => '<option ' + (s === i.status ? 'selected' : '') + '>' + s + '</option>').join('') +
-      '</select></div></div></div>';
+      (admin ? '<div class="cact"><button class="btn" onclick="openForm(\'' + i.id + '\')">แก้ไข</button>' +
+        '<select onchange="updateStatus(\'' + i.id + '\', this.value)">' +
+        APP_CONFIG.statuses.map(s => '<option ' + (s === i.status ? 'selected' : '') + '>' + s + '</option>').join('') +
+        '</select></div>' : '') +
+      '</div></div>';
   }).join('') + '</div>';
-  el.querySelectorAll('img[data-od]').forEach(async img => {
-    const u = await thumbUrl(img.dataset.od);
+  el.querySelectorAll('img[data-path]').forEach(async img => {
+    const u = await imgObjectUrl(img.dataset.path);
     if (u) img.src = u; else img.outerHTML = '<div class="noimg">📦</div>';
   });
 }
 
-/* ===== 5) ฟอร์มเพิ่ม/แก้ ===== */
+/* ----- คลังรูป ----- */
+const imgCache = {};
+async function imgObjectUrl(path) {
+  if (imgCache[path]) return imgCache[path];
+  const { data, error } = await sb.storage.from(APP_CONFIG.bucket).download(path);
+  if (error) return '';
+  const url = URL.createObjectURL(data);
+  imgCache[path] = url;
+  return url;
+}
+
+/* ----- ฟอร์มเพิ่ม/แก้ ----- */
 function openForm(id) {
+  if (myRole !== 'admin') return;
   editingId = id || null;
-  const it = id ? mapRows(allRows).find(x => x.id === id) : null;
+  const it = id ? allItems.find(x => x.id === id) : null;
   document.getElementById('formTitle').textContent = it ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์';
   const set = (k, v) => document.getElementById(k).value = v || '';
   set('fNumber', it && it.num); set('fName', it && it.name); set('fCategory', it && it.cat);
@@ -215,46 +164,56 @@ async function submitForm(e) {
   e.preventDefault();
   const p = { num: val('fNumber'), name: val('fName'), cat: val('fCategory'), status: val('fStatus'),
               date: val('fDate'), year: val('fYear'), price: val('fPrice'), loc: val('fLocation'), notes: val('fNotes') };
-  const file = document.getElementById('fImage').files[0];
   try {
+    let imgPath = null;
+    const file = document.getElementById('fImage').files[0];
     if (file) {
       const blob = await compressImage(file, 1600, 0.82);
-      const up = await uploadImage(blob, (p.num || 'asset') + '_' + Date.now() + '.jpg');
-      p.fileId = 'OD:' + up.id;
+      imgPath = 'images/' + (p.num || 'asset') + '_' + Date.now() + '.jpg';
+      const { error } = await sb.storage.from(APP_CONFIG.bucket)
+        .upload(imgPath, blob, { contentType: 'image/jpeg' });
+      if (error) throw error;
     }
     if (editingId) {
-      const idx = allRows.findIndex(r => String(r[0]) === editingId);
-      if (idx < 0) throw new Error('ไม่พบรายการ');
-      const old = allRows[idx].slice();
-      old[1] = p.num || old[1]; old[2] = p.name || old[2]; old[3] = p.cat || old[3];
-      old[4] = p.status || old[4]; old[5] = p.date || old[5]; old[6] = p.year || old[6];
-      old[7] = p.price || old[7]; old[8] = p.loc || old[8]; old[11] = p.notes || old[11];
-      if (p.fileId) { old[10] = p.fileId; old[9] = ''; }
-      old[13] = new Date().toISOString();
-      await wbUpdate(idx, old);
+      const up = { asset_number: p.num, name: p.name, category: p.cat, status: p.status,
+        purchase_date: p.date, year: p.year, price: p.price, location: p.loc,
+        notes: p.notes, updated_at: new Date().toISOString() };
+      if (imgPath) up.image_path = imgPath;
+      const { error } = await sb.from('assets').update(up).eq('id', editingId);
+      if (error) throw error;
     } else {
-      await wbAppend(['AST-' + Date.now(), p.num, p.name, p.cat, p.status || 'รอตรวจรับ',
-        p.date, p.year, p.price, p.loc, '', p.fileId || '', p.notes,
-        new Date().toISOString(), new Date().toISOString()]);
+      const { error } = await sb.from('assets').insert([{
+        id: 'AST-' + Date.now(), asset_number: p.num, name: p.name, category: p.cat,
+        status: p.status || 'รอตรวจรับ', purchase_date: p.date, year: p.year, price: p.price,
+        location: p.loc, image_path: imgPath, notes: p.notes
+      }]);
+      if (error) throw error;
     }
-    toast('บันทึกเรียบร้อย ✓');
-    closeForm();
-    await loadInitialData();
-  } catch (err) { toast('ผิดพลาด: ' + err.message); }
+    toast('บันทึกเรียบร้อย ✓'); closeForm(); await loadInitialData();
+  } catch (err) { toast('ผิดพลาด: ' + (err.message || err)); }
 }
 
 async function updateStatus(id, status) {
-  try {
-    const idx = allRows.findIndex(r => String(r[0]) === id);
-    if (idx < 0) return;
-    const old = allRows[idx].slice();
-    old[4] = status; old[13] = new Date().toISOString();
-    await wbUpdate(idx, old);
-    toast('อัปเดตสถานะแล้ว ✓');
-    await loadInitialData();
-  } catch (err) { toast('ผิดพลาด: ' + err.message); }
+  if (myRole !== 'admin') return;
+  const { error } = await sb.from('assets').update({ status: status, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('ผิดพลาด: ' + error.message); return; }
+  toast('อัปเดตสถานะแล้ว ✓');
+  await loadInitialData();
 }
 
+/* ----- ส่งออก CSV ให้พี่เขาเปิดใน Excel ----- */
+function exportCSV() {
+  const head = ['id','asset_number','name','category','status','purchase_date','year','price','location','image_path','notes'];
+  const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const rows = allItems.map(i => [i.id, i.num, i.name, i.cat, i.status, i.date, i.year, i.price, i.loc, i.img, i.notes].map(esc).join(','));
+  const blob = new Blob(['\ufeff' + head.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ครุภัณฑ์_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+}
+
+/* ----- ตัวช่วย ----- */
 function compressImage(file, maxW, q) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -270,7 +229,6 @@ function compressImage(file, maxW, q) {
     img.src = url;
   });
 }
-
 let toastTimer;
 function toast(msg) {
   const el = document.getElementById('toast');
