@@ -4,18 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ระบบจัดการครุภัณฑ์</title>
-<script src="msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="aurora"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
 
 <div id="loginBox" class="loginbox" style="display:none">
-  <div class="glass login-card">
+  <form class="glass login-card" onsubmit="doLogin(event)">
     <h2>ระบบจัดการครุภัณฑ์</h2>
-    <p>กรุณาเข้าสู่ระบบด้วยอีเมลของคณะ</p>
-    <button class="btn primary" onclick="login()">เข้าสู่ระบบ</button>
-  </div>
+    <p>เข้าสู่ระบบด้วยบัญชีที่ผู้ดูแลเพิ่มให้เท่านั้น</p>
+    <input id="loginEmail" type="email" placeholder="อีเมล" required>
+    <input id="loginPass" type="password" placeholder="รหัสผ่าน" required>
+    <button class="btn primary" type="submit">เข้าสู่ระบบ</button>
+  </form>
 </div>
 
 <div class="app" id="app" style="display:none">
@@ -33,6 +35,7 @@
     </div>
     <button class="switch" onclick="toggleTheme()" aria-label="สลับธีม"><span class="knob"></span></button>
     <span id="whoami" class="whoami"></span>
+    <span id="roleBadge" class="pill" style="color:var(--ac);border-color:var(--ac)66;background:var(--ac)1f"></span>
   </header>
 
   <section class="stats" id="stats"></section>
@@ -41,7 +44,8 @@
     <select id="yearFilter"><option value="">ทุกปี</option></select>
     <select id="statusFilter"><option value="">ทุกสถานะ</option></select>
     <button class="btn" onclick="loadItems()">ค้นหา</button>
-    <button class="btn primary" onclick="openForm()">+ เพิ่มครุภัณฑ์</button>
+    <button id="btnExport" class="btn" onclick="exportCSV()">ส่งออก CSV</button>
+<button id="btnAdd" class="btn primary" onclick="openForm()">+ เพิ่มครุภัณฑ์</button>
   </section>
 
   <section id="list"></section>
