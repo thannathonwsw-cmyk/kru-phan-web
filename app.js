@@ -167,9 +167,11 @@ async function submitForm(e) {
   try {
     let imgPath = null;
     const file = document.getElementById('fImage').files[0];
+    const newId = 'AST-' + Date.now();
     if (file) {
       const blob = await compressImage(file, 1600, 0.82);
-      imgPath = 'images/' + (p.num || 'asset') + '_' + Date.now() + '.jpg';
+      /* ชื่อไฟล์ในคลังรูปใช้เฉพาะอักษรอังกฤษ ตัวเลข _ - . เท่านั้น */
+      imgPath = 'images/' + (editingId || newId) + '_' + Date.now() + '.jpg';
       const { error } = await sb.storage.from(APP_CONFIG.bucket)
         .upload(imgPath, blob, { contentType: 'image/jpeg' });
       if (error) throw error;
@@ -183,7 +185,7 @@ async function submitForm(e) {
       if (error) throw error;
     } else {
       const { error } = await sb.from('assets').insert([{
-        id: 'AST-' + Date.now(), asset_number: p.num, name: p.name, category: p.cat,
+        id: newId, asset_number: p.num, name: p.name, category: p.cat,
         status: p.status || 'รอตรวจรับ', purchase_date: p.date, year: p.year, price: p.price,
         location: p.loc, image_path: imgPath, notes: p.notes
       }]);
@@ -192,7 +194,6 @@ async function submitForm(e) {
     toast('บันทึกเรียบร้อย ✓'); closeForm(); await loadInitialData();
   } catch (err) { toast('ผิดพลาด: ' + (err.message || err)); }
 }
-
 async function updateStatus(id, status) {
   if (myRole !== 'admin') return;
   const { error } = await sb.from('assets').update({ status: status, updated_at: new Date().toISOString() }).eq('id', id);
